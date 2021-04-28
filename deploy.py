@@ -1,4 +1,5 @@
 import binascii
+import hashlib
 import base64
 import asyncio
 import aiohttp
@@ -30,7 +31,7 @@ def tx_sign(data, pk):
 
 
 def get_address_bytes(public_bytes):
-    return binascii.hexlify(keccak(public_bytes)[:20]).decode()
+    return hashlib.sha256(public_bytes).hexdigest()[:40]
 
 
 def get_address_from_private_key(pk, prefix='0lt'):
@@ -76,7 +77,7 @@ def prepare_payload(data, pk):
     if "gasPrice" in data:
         data["gasPrice"] = {
             "currency": "OLT",
-            "value": str(data["gasPrice"]),
+            "value": str(data["gasPrice"] * 10 ** 9), # something like gwei
         }
     return data
 
@@ -128,7 +129,7 @@ async def deploy_factory(fee_address):
     return await deploy_smart_contract({
         "amount": 0,
         "gas": 1000000,
-        "gasPrice": 10,
+        "gasPrice": 1,
         "data": constructor.data_in_transaction[2:],
     }, DEPLOYER_PK)
 
