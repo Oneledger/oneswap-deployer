@@ -1,0 +1,5 @@
+web3==5.12.1
+ujson==3.0.0
+cryptography==3.1
+eth-tester==0.5.0b4
+python-dotenv==0.17.0
