@@ -28,6 +28,11 @@ except Exception:
     deployment = {}
 
 
+def update_file_config():
+    with open('deployment.json', 'w', encoding='utf-8') as f:
+        ujson.dump(deployment, f, ensure_ascii=False, indent=8)
+
+
 def tx_sign(data, pk):
     private_key = ed25519.Ed25519PrivateKey.from_private_bytes(binascii.unhexlify(pk))
     public_key = private_key.public_key()
@@ -319,8 +324,8 @@ async def smart_deploy(address_key, func, params=None):
             "address": address,
             "tx_hash": tx_hash,
         }
-        with open('deployment.json', 'w', encoding='utf-8') as f:
-            ujson.dump(deployment, f, ensure_ascii=False, indent=4)
+        update_file_config()
+
         print(f"{address_key}: done, address: '{address}'")
     print('')
     return address
@@ -438,6 +443,12 @@ async def get_reserves(factory_address, token0, token1):
         return [0, 0]
 
     pair_address = result[-40:]
+    deployment["UniswapV2PairWOLT2DAI"] = {
+        "address": pair_address,
+        "tx_hash": deployment.get("UniswapV2PairWOLT2DAI", {}).get("tx_hash"),
+    }
+    update_file_config()
+
     result = await call_method(pair_address, 'UniswapV2Pair', 'getReserves', [], call_data)
     if not result.rstrip('0'):
         return [0, 0]
@@ -464,6 +475,12 @@ async def add_default_liquidity_with_eth(factory_address, router_address, user_a
             int(time.time() + deadline),
         ], call_data)
         assert done is True, f"Liquidity pair failed, please check '{tx_hash}' for more details"
+
+        deployment["UniswapV2PairWOLT2DAI"] = {
+            "address": deployment.get("UniswapV2PairWOLT2DAI", {}).get("address"),
+            "tx_hash": tx_hash,
+        }
+        update_file_config()
 
         reserves = await get_reserves(factory_address, token0, token1)
         assert reserves[0] != 0, "reserve0 is zero"
@@ -507,8 +524,8 @@ async def main():
     await check_is_approved_or_approve(wolt_address, router_address, 'WOLT')
     await check_is_approved_or_approve(dai_address, router_address, 'DAI')
 
-    await swap_olt_to_wolt(wolt_address, deployer_address, 30_000)
-    await mint_initial_dai_supply(dai_address, deployer_address, 30_000)
+    await swap_olt_to_wolt(wolt_address, deployer_address, 1_000_000)
+    await mint_initial_dai_supply(dai_address, deployer_address, 21770)
 
     # NOTE: One time action, if the K is wrong, need to redeploy the uniswap
     await add_default_liquidity_with_eth(
@@ -517,8 +534,8 @@ async def main():
         deployer_address,
         wolt_address,
         dai_address,
-        1,
-        0.02177,
+        1_000_000,
+        21770,
     )
 
     print('Done! Initial setup set successfully.')
