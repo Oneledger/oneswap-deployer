@@ -407,6 +407,8 @@ async def mint_initial_dai_supply(contract_address, user_address, amount):
         "gasPrice": 1,
     }
 
+    amount_in_wei = amount * 10 ** 18
+
     print(f"Checking address '0lt{user_address}' on initial balance of DAI...")
     result = await call_method(contract_address, 'DAI', 'totalSupply', [], call_data)
 
@@ -416,14 +418,14 @@ async def mint_initial_dai_supply(contract_address, user_address, amount):
 
         done, _ = await execute_method(contract_address, 'DAI', 'mint', [
             Web3.toChecksumAddress(user_address),
-            amount * 10 ** 18,
+            amount_in_wei,
         ], call_data)
         assert done is True, "DAI not minted"
 
         result = await call_method(contract_address, 'DAI', 'totalSupply', [], call_data)
         balance_of = int(result, 16)
         assert balance_of >= amount, "Initial supply not set, revert"
-        print(f"{amount} tokens was minted and add for an address '0lt{user_address}'")
+        print(f"{amount_in_wei} tokens was minted and add for an address '0lt{user_address}'")
     else:
         print(f"Balance of '0lt{user_address}' filled, skipping...")
     print('')
