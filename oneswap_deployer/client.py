@@ -14,6 +14,7 @@ from .utils import (
     bytecode_to_bytes,
     add_0lt,
     get_address_from_private_key,
+    parse_call_response,
 )
 
 
@@ -105,6 +106,8 @@ class Client:
             raise WaitError(f"Failed to broadcast tx ({tx_hash}), details: {error['message']}")
 
         tx_result = resp['result']['result']['tx_result']
+        click.echo(f"TX: gas used: {tx_result['gasUsed']}")
+        click.echo(f"TX: gas wanted: {tx_result['gasWanted']}")
         if tx_result['code'] == 1:
             raise WaitError(f"Failed to execute tx ({tx_hash}), details: {tx_result['log']}")
 
@@ -112,8 +115,6 @@ class Client:
         if events.get('tx.error'):
             raise WaitError(f"Failed to execute vm ({tx_hash}), details: {events['tx.error']}")
 
-        click.echo(f"TX: gas used: {tx_result['gasUsed']}")
-        click.echo(f"TX: gas wanted: {tx_result['gasWanted']}")
         
         click.secho(f"Transaction '{tx_hash}' has been mined!", fg='green')
         return events
@@ -193,4 +194,6 @@ class Client:
         if resp.get('error'):
             raise ProtocolAPIError(f"Failed to call smart contract method '{fn_name}' on address '{add_0lt(contract_address)}', details: {resp['error']['message']}")
 
-        return resp['result']['result']
+        result = resp['result']['result']
+        assert result, f'Call returned empty data, error occured during call "{fn_name}" method on contract "{contract_address}" with data {data}'
+        return parse_call_response(fn.abi, result)

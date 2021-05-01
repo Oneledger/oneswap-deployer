@@ -8,7 +8,8 @@
     },
     "scripts": {
         "compile": "truffle compile",
-        "test_deploy": "python3 oneswap.py test_deploy"
+        "test_deploy": "python3 oneswap.py test_deploy",
+        "make_restart": "rm _cache_state.json || true && rm -rf build && truffle compile && python3 oneswap.py test_deploy"
     },
     "author": "",
     "license": "Apache",
