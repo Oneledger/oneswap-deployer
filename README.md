@@ -24,6 +24,8 @@ Available commands to work with a pool colud be found via
 `python3 oneswap.py --help`
 
 Methods:
-* `test_deploy`
-* `lp_info`
-* `add_liquidity_OLT`
+* `test_deploy` - initial test deployment to start work
+* `lp_info` - liquidity pool info
+* `add_liquidity_OLT` - adding the liquidity to [ERC20 token - OLT]
+* `remove_liquidity_OLT` - removing the liquidity to [ERC20 token - OLT]
+* `balance` - balance of an address on some token
