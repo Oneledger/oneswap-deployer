@@ -4,21 +4,46 @@ import time
 import hashlib
 import base64
 import asyncio
+import itertools
 from functools import wraps
 
 import aiohttp
 import ujson
+import web3
 from web3 import Web3
+from web3._utils.abi import get_abi_output_types, map_abi_data
+from web3._utils.normalizers import BASE_RETURN_NORMALIZERS
+
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from .config import BASE_DIR
 
 
+def parse_call_response(fn_abi, result):
+    output_types = get_abi_output_types(fn_abi)
+    output_data = Web3().codec.decode_abi(get_abi_output_types(fn_abi), binascii.unhexlify(result))
+    _normalizers = itertools.chain(
+        BASE_RETURN_NORMALIZERS,
+        [],
+    )
+    normalized_data = map_abi_data(_normalizers, output_types, output_data)
+    if len(normalized_data) == 1:
+        return normalized_data[0]
+    else:
+        return normalized_data
+
+
 def add_0lt(address):
     if address.startswith('0lt'):
         return address
     return f'0lt{address}'
+
+
+def remove_0x(address):
+    if address.startswith('0x'):
+        return address[2:]
+    return address
 
 
 def get_signed_params(raw_tx, pk):
@@ -107,7 +132,7 @@ def coro(f):
 
 
 def to_wei(value):
-    return int(float(value) * 10 ** 18)
+    return int(value * 10 ** 18)
 
 
 def from_wei(value):
