@@ -18,4 +18,12 @@ In order to have an initial liquidity, the next steps performed:
 2. Adding liquidity with WOLT + ERC20 tokens to create UniswapV2Pair;
 
 ### Quick build of OneSwap with 1000000 WOLT - 21770 DAI LP
-`npm run deploy`
+`npm run test_deploy`
+
+Available commands to work with a pool colud be found via
+`python3 oneswap.py --help`
+
+Methods:
+* `test_deploy`
+* `lp_info`
+* `add_liquidity_OLT`
