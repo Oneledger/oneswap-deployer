@@ -689,4 +689,11 @@ contract UniswapV2Router is IUniswapV2Router02 {
     {
         return UniswapV2Library.getAmountsIn(factory, amountOut, path);
     }
+
+    function getPoolFeeRate() public pure returns (uint256[] memory info) {
+        info = new uint256[](2);
+        info[0] = UniswapV2Library.POOL_FEE;
+        info[1] = UniswapV2Library.POOL_FEE_DECIMALS;
+        return info;
+    }
 }

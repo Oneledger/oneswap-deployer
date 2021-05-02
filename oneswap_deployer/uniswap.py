@@ -26,8 +26,8 @@ class UniswapUtils:
             return float('inf')
 
     @classmethod
-    def calculate_slippage_amount(cls, amount, slippage):
-        """Calculate slippage amount
+    def calculate_min_slippage_amount(cls, amount, slippage):
+        """Calculate min slippage amount
         """
         slippage = round(slippage, 2)
         spercent = slippage / 100
@@ -36,6 +36,14 @@ class UniswapUtils:
             # colud not perform when tokens not enough
             return 0
         return slippaged
+
+    @classmethod
+    def calculate_max_slippage_amount(cls, amount, slippage):
+        """Calculate max slippage amount
+        """
+        slippage = round(slippage, 2)
+        spercent = slippage / 100
+        return Web3.toWei(Web3.fromWei(amount, 'wei') * Decimal(1 + spercent), 'wei')
 
     @staticmethod
     def sort_tokens(tokenA, tokenB):
@@ -63,6 +71,7 @@ class UniswapManager:
 
     def __init__(self, state_path, data=DEFAULT_DATA.copy()):
         self.client = None
+        self.sl = None
         self.fee_address = None
         self._state = {}
         self._state_path = state_path
@@ -72,7 +81,7 @@ class UniswapManager:
         try:
             with open(self._state_path, 'r', encoding='utf-8') as f:
                 self._state = ujson.load(f)
-                click.secho('State file loaded', fg='green')
+                click.secho('State file loaded', fg='blue')
         except FileNotFoundError:
             click.secho('State file not found, skipping', fg='red')
         except ValueError:
@@ -85,6 +94,9 @@ class UniswapManager:
 
     def use_client(self, client):
         self.client = client
+
+    def use_swap_list(self, sl):
+        self.sl = sl
 
     def set_fee(self, address):
         assert self.client is not None, "Client must be initialized first"
@@ -175,6 +187,8 @@ class UniswapManager:
         """
         assert self.fee_address is not None, "Fee address must be set"
         assert self.client is not None, "Client not initialized"
+        assert self.sl is not None, "Swap List not initialized"
+
         try:
             after_dot = token_rate.split('.')[1]
             divider = 1 * 10 ** len(after_dot)
@@ -211,6 +225,9 @@ class UniswapManager:
         pair_address = await self.get_pair(self._get_state("WOLT"), self._get_state("DAI"))
 
         await self.erc20_approve(pair_address, router_address)
+
+        self.sl.add("WOLT", wolt_address)
+        self.sl.add("DAI", dai_address)
 
         click.secho('Done! Initial setup set successfully.', fg='green')
 
@@ -393,20 +410,75 @@ class UniswapManager:
             ]
         ], self.get_initial_data())
 
-    async def swap_exact_OLT_for_tokens(self, token0, token1, amount_in, amount_out_min, to, deadline):
-        """Perform swap from OLT -> ERC20 token for receive with min amount
+    async def get_amounts_in(self, amount, token0, token1):
+        """Used to determine the amounts for in
         """
         router_address = self._get_state('UniswapV2Router')
-        data = self.get_initial_data()
-        data["amount"]["value"] = str(amount_in)
-        # checking before execution for uniswap error
 
-        click.echo(f'Starting to perform swap on router "{add_0lt(router_address)}"...')
-        await self.client.call_method(router_address, 'UniswapV2Router', 'swapExactETHForTokens', [
-            amount_out_min,
+        return await self.client.call_method(router_address, 'UniswapV2Router', 'getAmountsIn', [
+            amount,
             [
                 self.client.prepare_address(token0),
                 self.client.prepare_address(token1),
+            ]
+        ], self.get_initial_data())
+
+    async def get_pool_fee_rate(self):
+        """Get uniswap pool fee rate
+        """
+        router_address = self._get_state('UniswapV2Router')
+
+        info = await self.client.call_method(router_address, 'UniswapV2Router', 'getPoolFeeRate', [], self.get_initial_data())
+        return 1 - Decimal(info[0]) / 10 ** info[1]
+
+    async def swap_tokens_for_exact_OLT(self, token, amount_in_max, amount_out, to, deadline):
+        """Perform swap from OLT -> ERC20 token for receive with amount with specified max on swap
+        """
+        wolt_token = self.sl.get('WOLT')
+        router_address = self._get_state('UniswapV2Router')
+        data = self.get_initial_data()
+
+        click.echo(f'Starting to perform swap tokens for exact OLT on router "{add_0lt(router_address)}"...')
+        # checking before execution for uniswap error
+        await self.client.call_method(router_address, 'UniswapV2Router', 'swapTokensForExactETH', [
+            amount_out,
+            amount_in_max,
+            [
+                self.client.prepare_address(token),
+                self.client.prepare_address(wolt_token),
+            ],
+            self.client.prepare_address(to),
+            int(time.time() + deadline),
+        ], data)
+
+        done, tx_hash = await self.client.execute_method(router_address, 'UniswapV2Router', 'swapTokensForExactETH', [
+            amount_out,
+            amount_in_max,
+            [
+                self.client.prepare_address(token),
+                self.client.prepare_address(wolt_token),
+            ],
+            self.client.prepare_address(to),
+            int(time.time() + deadline),
+        ], data)
+        assert done, f"Swap failed, please check '{tx_hash}' for more details"
+        click.secho(f'Swap done!', fg='green')
+
+    async def swap_exact_OLT_for_tokens(self, token, amount_in, amount_out_min, to, deadline):
+        """Perform swap from OLT -> ERC20 token for receive with min amount
+        """
+        wolt_token = self.sl.get('WOLT')
+        router_address = self._get_state('UniswapV2Router')
+        data = self.get_initial_data()
+        data["amount"]["value"] = str(amount_in)
+
+        click.echo(f'Starting to perform swap exact OLT for tokens on router "{add_0lt(router_address)}"...')
+        # checking before execution for uniswap error
+        await self.client.call_method(router_address, 'UniswapV2Router', 'swapExactETHForTokens', [
+            amount_out_min,
+            [
+                self.client.prepare_address(wolt_token),
+                self.client.prepare_address(token),
             ],
             self.client.prepare_address(to),
             int(time.time() + deadline),
@@ -415,11 +487,73 @@ class UniswapManager:
         done, tx_hash = await self.client.execute_method(router_address, 'UniswapV2Router', 'swapExactETHForTokens', [
             amount_out_min,
             [
+                self.client.prepare_address(wolt_token),
+                self.client.prepare_address(token),
+            ],
+            self.client.prepare_address(to),
+            int(time.time() + deadline),
+        ], data)
+        assert done, f"Swap failed, please check '{tx_hash}' for more details"
+        click.secho(f'Swap done!', fg='green')
+
+    async def swap_tokens_for_exact_tokens(self, token0, token1, amount_in_max, amount_out, to, deadline):
+        """Perform swap from ERC20 -> ERC20 token for receive with amount with specified max on swap
+        """
+        router_address = self._get_state('UniswapV2Router')
+
+        click.echo(f'Starting to perform swap tokens for exact tokens on router "{add_0lt(router_address)}"...')
+        # checking before execution for uniswap error
+        await self.client.call_method(router_address, 'UniswapV2Router', 'swapTokensForExactTokens', [
+            amount_out,
+            amount_in_max,
+            [
                 self.client.prepare_address(token0),
                 self.client.prepare_address(token1),
             ],
             self.client.prepare_address(to),
             int(time.time() + deadline),
-        ], data)
+        ], self.get_initial_data())
+
+        done, tx_hash = await self.client.execute_method(router_address, 'UniswapV2Router', 'swapTokensForExactTokens', [
+            amount_out,
+            amount_in_max,
+            [
+                self.client.prepare_address(token0),
+                self.client.prepare_address(token1),
+            ],
+            self.client.prepare_address(to),
+            int(time.time() + deadline),
+        ], self.get_initial_data())
+        assert done, f"Swap failed, please check '{tx_hash}' for more details"
+        click.secho(f'Swap done!', fg='green')
+
+    async def swap_exact_tokens_for_tokens(self, token0, token1, amount_in, amount_out_min, to, deadline):
+        """Perform swap from ERC20 -> ERC20 token for receive with amount with min amount
+        """
+        router_address = self._get_state('UniswapV2Router')
+
+        click.echo(f'Starting to perform swap exact tokens for tokens on router "{add_0lt(router_address)}"...')
+        # checking before execution for uniswap error
+        await self.client.call_method(router_address, 'UniswapV2Router', 'swapExactTokensForTokens', [
+            amount_in,
+            amount_out_min,
+            [
+                self.client.prepare_address(token1),
+                self.client.prepare_address(token0),
+            ],
+            self.client.prepare_address(to),
+            int(time.time() + deadline),
+        ], self.get_initial_data())
+
+        done, tx_hash = await self.client.execute_method(router_address, 'UniswapV2Router', 'swapExactTokensForTokens', [
+            amount_in,
+            amount_out_min,
+            [
+                self.client.prepare_address(token1),
+                self.client.prepare_address(token0),
+            ],
+            self.client.prepare_address(to),
+            int(time.time() + deadline),
+        ], self.get_initial_data())
         assert done, f"Swap failed, please check '{tx_hash}' for more details"
         click.secho(f'Swap done!', fg='green')

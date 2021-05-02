@@ -7,6 +7,9 @@ import "@uniswap/v2-periphery/contracts/libraries/SafeMath.sol";
 library UniswapV2Library {
     using SafeMath for uint256;
 
+    uint256 public constant POOL_FEE = 997;
+    uint256 public constant POOL_FEE_DECIMALS = 3;
+
     // returns sorted token addresses, used to handle return values from pairs sorted in this order
     function sortTokens(address tokenA, address tokenB)
         internal
@@ -69,9 +72,10 @@ library UniswapV2Library {
             reserveIn > 0 && reserveOut > 0,
             "UniswapV2Library: INSUFFICIENT_LIQUIDITY"
         );
-        uint256 amountInWithFee = amountIn.mul(997);
+        uint256 amountInWithFee = amountIn.mul(POOL_FEE);
         uint256 numerator = amountInWithFee.mul(reserveOut);
-        uint256 denominator = reserveIn.mul(1000).add(amountInWithFee);
+        uint256 denominator =
+            reserveIn.mul(10**POOL_FEE_DECIMALS).add(amountInWithFee);
         amountOut = numerator / denominator;
     }
 
@@ -86,8 +90,8 @@ library UniswapV2Library {
             reserveIn > 0 && reserveOut > 0,
             "UniswapV2Library: INSUFFICIENT_LIQUIDITY"
         );
-        uint256 numerator = reserveIn.mul(amountOut).mul(1000);
-        uint256 denominator = reserveOut.sub(amountOut).mul(997);
+        uint256 numerator = reserveIn.mul(amountOut).mul(10**POOL_FEE_DECIMALS);
+        uint256 denominator = reserveOut.sub(amountOut).mul(POOL_FEE);
         amountIn = (numerator / denominator).add(1);
     }
 

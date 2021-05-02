@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 _cache_state.json
 node_modules/
+db/
