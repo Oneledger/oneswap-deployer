@@ -116,7 +116,7 @@ class Client:
             raise WaitError(f"Failed to execute vm ({tx_hash}), details: {events['tx.error']}")
 
         
-        click.secho(f"Transaction '{tx_hash}' has been mined!", fg='green')
+        click.secho(f"Transaction '{tx_hash}' has been mined!\n", fg='green')
         return events
 
     async def create_raw_tx(self, params):
