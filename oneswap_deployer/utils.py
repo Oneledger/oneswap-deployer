@@ -46,6 +46,12 @@ def remove_0x(address):
     return address
 
 
+def remove_0lt(address):
+    if address.startswith('0lt'):
+        return address[3:]
+    return address
+
+
 def get_signed_params(raw_tx, pk):
     public_key, signature = tx_sign(raw_tx, pk)
     return {
@@ -137,3 +143,7 @@ def to_wei(value):
 
 def from_wei(value):
     return float(value / 10 ** 18)
+
+
+def pretty_float(value, decimals):
+    return f'{value / 10 ** decimals:.18f}'.rstrip('0').rstrip('.')

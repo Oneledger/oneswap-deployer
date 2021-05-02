@@ -1,9 +1,11 @@
 import time
 import sys
 import copy
+from decimal import Decimal
 
 import ujson
 import click
+from web3 import Web3
 
 from .utils import (
     add_0lt,
@@ -12,10 +14,40 @@ from .utils import (
 )
 
 
-max_uint_value = int(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
+class UniswapUtils:
+
+    @staticmethod
+    def _get_change(current, previous):
+        if current == previous:
+            return 0
+        try:
+            return round((abs(current - previous) / previous) * 100, 2)
+        except ZeroDivisionError:
+            return float('inf')
+
+    @classmethod
+    def calculate_slippage_amount(cls, amount, slippage):
+        """Calculate slippage amount
+        """
+        slippage = round(slippage, 2)
+        spercent = slippage / 100
+        slippaged = Web3.toWei(Web3.fromWei(amount, 'wei') * Decimal(1 - spercent), 'wei')
+        if cls._get_change(slippaged, amount) > slippage:
+            # colud not perform when tokens not enough
+            return 0
+        return slippaged
+
+    @staticmethod
+    def sort_tokens(tokenA, tokenB):
+        """Get sorted tokens
+        """
+        assert tokenA != tokenB, "Identical addresses"
+        return [tokenA, tokenB] if tokenA < tokenB else [tokenB, tokenA]
 
 
 class UniswapManager:
+
+    MAX_UINT_VALUE = int(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
 
     DEFAULT_DATA = {
         "amount": {
@@ -74,8 +106,11 @@ class UniswapManager:
 
         return contract_data[key]
 
-    async def get_token_name(self, token0):
-        return await self.client.call_method(token0, 'WOLT', 'symbol', [], self.get_initial_data())
+    async def get_token_name(self, token):
+        return await self.client.call_method(token, 'WOLT', 'symbol', [], self.get_initial_data())
+
+    async def get_token_decimals(self, token):
+        return await self.client.call_method(token, 'WOLT', 'decimals', [], self.get_initial_data())
 
     async def smart_deploy(self, abi_name, params=None, amount=0):
         """Smart deploy used to create or take a contract for cache
@@ -98,12 +133,6 @@ class UniswapManager:
             })
             click.secho(f"{abi_name}: done, address: '{address}'")
         return address
-
-    def sort_tokens(self, tokenA, tokenB):
-        """Get sorted tokens
-        """
-        assert tokenA != tokenB, "Identical addresses"
-        return [tokenA, tokenB] if tokenA < tokenB else [tokenB, tokenA]
 
     async def get_pair(self, token0, token1):
         factory_address = self._get_state("UniswapV2Factory")
@@ -253,7 +282,7 @@ class UniswapManager:
     async def get_token_balance(self, token, address):
         return await self.client.call_method(token, 'WOLT', 'balanceOf', [self.client.prepare_address(address)], self.get_initial_data())
 
-    async def erc20_approve(self, erc20_address, address, value=max_uint_value):
+    async def erc20_approve(self, erc20_address, address, value=MAX_UINT_VALUE):
         """Check ERC20 approvement for an address
         """
         name = await self.get_token_name(erc20_address)
@@ -307,7 +336,7 @@ class UniswapManager:
             pair_address = remove_0x(result)
             assert pair_address != '0' * 40, "Failed to get address of the pair"
 
-            token0, token1 = self.sort_tokens(token0, token1)
+            token0, token1 = UniswapUtils.sort_tokens(token0, token1)
             self.update_state(f"UniswapV2Pair_{token0}_{token1}", {
                 "address": pair_address,
                 "tx_hash": tx_hash,
@@ -350,3 +379,47 @@ class UniswapManager:
         ], self.get_initial_data())
         assert done, f"Liquidity pair failed, please check '{tx_hash}' for more details"
         click.secho(f'Liquidity burned!', fg='green')
+
+    async def get_amounts_out(self, amount, token0, token1):
+        """Used to determine the amounts for out
+        """
+        router_address = self._get_state('UniswapV2Router')
+
+        return await self.client.call_method(router_address, 'UniswapV2Router', 'getAmountsOut', [
+            amount,
+            [
+                self.client.prepare_address(token0),
+                self.client.prepare_address(token1),
+            ]
+        ], self.get_initial_data())
+
+    async def swap_exact_OLT_for_tokens(self, token0, token1, amount_in, amount_out_min, to, deadline):
+        """Perform swap from OLT -> ERC20 token for receive with min amount
+        """
+        router_address = self._get_state('UniswapV2Router')
+        data = self.get_initial_data()
+        data["amount"]["value"] = str(amount_in)
+        # checking before execution for uniswap error
+
+        click.echo(f'Starting to perform swap on router "{add_0lt(router_address)}"...')
+        await self.client.call_method(router_address, 'UniswapV2Router', 'swapExactETHForTokens', [
+            amount_out_min,
+            [
+                self.client.prepare_address(token0),
+                self.client.prepare_address(token1),
+            ],
+            self.client.prepare_address(to),
+            int(time.time() + deadline),
+        ], data)
+
+        done, tx_hash = await self.client.execute_method(router_address, 'UniswapV2Router', 'swapExactETHForTokens', [
+            amount_out_min,
+            [
+                self.client.prepare_address(token0),
+                self.client.prepare_address(token1),
+            ],
+            self.client.prepare_address(to),
+            int(time.time() + deadline),
+        ], data)
+        assert done, f"Swap failed, please check '{tx_hash}' for more details"
+        click.secho(f'Swap done!', fg='green')
