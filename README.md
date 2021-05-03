@@ -5,6 +5,12 @@ Deployment scripts based on UniswapV2 to the OneLedger network
 1. `yarn`
 2. `pip3 install -r requirements.txt`
 3. `npm run compile`
+4. `cp example.env .env`
+
+### `.env` variables
+- set `DEPLOYER_PK` to execute the transaction on the protocol (ed25519 key)
+- set `FEE_ADDRESS` for OneSwap contract
+- set `NODE_URL` for communicating with protocol
 
 
 ### Building the OneSwap initial set up (WOLT + DAI)
@@ -26,6 +32,7 @@ Available commands to work with a pool colud be found via
 Methods:
 * `test_deploy` - initial test deployment to start work
 * `lp_info` - liquidity pool info
-* `add_liquidity_OLT` - adding the liquidity to [ERC20 token - OLT]
-* `remove_liquidity_OLT` - removing the liquidity to [ERC20 token - OLT]
-* `balance` - balance of an address on some token
+* `add_liquidity` - adding the liquidity to pool
+* `remove_liquidity` - removing the liquidity from pool
+* `swap` - performs swap between tokens
+* `balance` - balance of an address for the tokens
