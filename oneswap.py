@@ -1,5 +1,6 @@
 from decimal import Decimal
 import asyncio
+import os
 
 import click
 
@@ -524,6 +525,7 @@ async def swap(ctx, amount, direction, name0, name1, to, deadline, slippage, aut
                 
     except ProtocolAPIError as e:
         click.secho(e.args[0], fg='red')
+
 
 if __name__ == '__main__':
     cli()
