@@ -1,5 +1,6 @@
 import asyncio
 import binascii
+import base64
 
 import ujson
 import aiohttp
@@ -84,6 +85,14 @@ class Client:
         balance = account.get('balance', '0') or '0'
         return int(balance)
 
+    async def get_logs(self, tx_hash):
+        """Get logs by tx hash
+        """
+        resp = await self._rpc_call('query.EVMTransactionLogs', {
+            'transactionHash': base64.b64encode(binascii.unhexlify(tx_hash.encode())).decode(),
+        })
+        return resp['result']['logs']
+
     async def wait_for_tx(self, tx_hash, repeat_count=25):
         """Used to wait a specific transaction per hash
         """
@@ -161,6 +170,7 @@ class Client:
         contract_address = result.get('tx.contract')
         if contract_address:
             return contract_address, transaction_hash
+        # logs = await self.get_logs(transaction_hash)
 
         return bool(binascii.hexlify(result['tx.status'].encode()).decode().rstrip('0')), transaction_hash
 

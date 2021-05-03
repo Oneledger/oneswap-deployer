@@ -9,7 +9,8 @@
     "scripts": {
         "compile": "truffle compile",
         "test_deploy": "python3 oneswap.py test_deploy",
-        "make_restart": "rm _cache_state.json || true && rm -rf build && truffle compile && python3 oneswap.py test_deploy"
+        "clear": "rm -rf db/ && rm -rf build",
+        "rebuild": "npm run clear && npm run compile"
     },
     "author": "",
     "license": "Apache",
