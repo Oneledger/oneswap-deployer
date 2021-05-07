@@ -110,9 +110,9 @@ async def test_deploy(ctx, token_rate, initial_liquidity_count, dai_supply):
     await umanager.erc20_approve(wolt_address, router_address)
     await umanager.erc20_approve(dai_address, router_address)
 
-    await umanager.add_liquidity_OLT("DAI", initial_liquidity_olt, initial_liquidity_dai, force=False)
+    await umanager.add_liquidity_OLT(dai_address, initial_liquidity_olt, initial_liquidity_dai, force=False)
 
-    pair_address = await umanager.get_pair(umanager._get_state("WOLT"), umanager._get_state("DAI"))
+    pair_address = await umanager.get_pair(wolt_address, dai_address)
 
     await umanager.erc20_approve(pair_address, router_address)
 
